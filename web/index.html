@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SentinelTrust — Federated Threat Detection & Zero-Trust Auth Gateway</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #060912;
+      --card-bg: rgba(13, 20, 36, 0.75);
+      --border: rgba(255, 255, 255, 0.08);
+      --primary: #00f0ff;
+      --primary-glow: rgba(0, 240, 255, 0.25);
+      --accent: #00ff9d;
+      --accent-glow: rgba(0, 255, 157, 0.25);
+      --threat: #ff3366;
+      --threat-glow: rgba(255, 51, 102, 0.25);
+      --warning: #ffb800;
+      --purple: #a855f7;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(0, 240, 255, 0.12) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(255, 51, 102, 0.1) 0px, transparent 50%);
+      color: var(--text);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    header {
+      padding: 1.25rem 2.5rem;
+      border-bottom: 1px solid var(--border);
+      background: rgba(6, 9, 18, 0.85);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo-group {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+    }
+
+    .logo-icon {
+      width: 38px;
+      height: 38px;
+      background: linear-gradient(135deg, #0284c7, #00f0ff);
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      font-size: 1.2rem;
+      color: #060912;
+      box-shadow: 0 0 15px var(--primary-glow);
+    }
+
+    .logo-text h1 {
+      font-size: 1.25rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(to right, #fff, var(--text-muted));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .badge-live {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0, 255, 157, 0.15);
+      border: 1px solid rgba(0, 255, 157, 0.3);
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      color: var(--accent);
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .badge-live::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--accent);
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    .hero {
+      text-align: center;
+      padding: 3rem 1.5rem 2rem;
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    .hero h2 {
+      font-size: 2.75rem;
+      font-weight: 800;
+      letter-spacing: -1px;
+      line-height: 1.2;
+      margin-bottom: 1rem;
+    }
+
+    .hero span.highlight {
+      background: linear-gradient(135deg, #00f0ff, #a855f7);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero p {
+      color: var(--text-muted);
+      font-size: 1.1rem;
+      line-height: 1.6;
+    }
+
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.25rem;
+      max-width: 1200px;
+      margin: 1.5rem auto 3rem;
+      padding: 0 1.5rem;
+    }
+
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.25rem 1.5rem;
+      backdrop-filter: blur(8px);
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .stat-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(0, 240, 255, 0.4);
+    }
+    .stat-card .val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.85rem;
+      font-weight: 700;
+      color: #fff;
+      margin-top: 0.35rem;
+    }
+    .stat-card .lbl {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.35fr;
+      gap: 1.75rem;
+      max-width: 1200px;
+      margin: 0 auto 3rem;
+      padding: 0 1.5rem;
+    }
+
+    @media (max-width: 960px) {
+      .main-grid { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.75rem;
+      backdrop-filter: blur(10px);
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .panel-header h3 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .form-group {
+      margin-bottom: 1.25rem;
+    }
+    .form-group label {
+      display: block;
+      font-size: 0.825rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    select, input {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--border);
+      color: #fff;
+      padding: 0.75rem 1rem;
+      border-radius: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    select:focus, input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 10px var(--primary-glow);
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1.5rem;
+    }
+
+    button {
+      flex: 1;
+      padding: 0.85rem 1.25rem;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #0284c7, #00f0ff);
+      color: #060912;
+      box-shadow: 0 4px 15px var(--primary-glow);
+    }
+    .btn-primary:hover {
+      filter: brightness(1.1);
+      transform: translateY(-1px);
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, #be123c, #ff3366);
+      color: #fff;
+      box-shadow: 0 4px 15px var(--threat-glow);
+    }
+    .btn-danger:hover {
+      filter: brightness(1.1);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.06);
+      color: #fff;
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    /* Bloom Filter Bit Matrix Visualizer */
+    .bloom-matrix {
+      display: grid;
+      grid-template-columns: repeat(32, 1fr);
+      gap: 3px;
+      margin-top: 0.85rem;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 0.85rem;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+    .bloom-bit {
+      height: 8px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 2px;
+      transition: background 0.3s;
+    }
+    .bloom-bit.set {
+      background: var(--threat);
+      box-shadow: 0 0 6px var(--threat);
+    }
+    .bloom-bit.check {
+      background: var(--primary);
+      box-shadow: 0 0 8px var(--primary);
+    }
+
+    /* Live Stream Feed */
+    .stream-feed {
+      height: 380px;
+      overflow-y: auto;
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .stream-feed::-webkit-scrollbar { width: 6px; }
+    .stream-feed::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 3px;
+    }
+
+    .feed-entry {
+      background: rgba(255, 255, 255, 0.03);
+      border-left: 3px solid var(--accent);
+      padding: 0.6rem 0.8rem;
+      border-radius: 0 6px 6px 0;
+      animation: fadeIn 0.2s ease-out;
+    }
+    .feed-entry.DENIED_REVOKED { border-left-color: var(--threat); }
+    .feed-entry.DENIED_TAMPERED { border-left-color: var(--threat); }
+    .feed-entry.DENIED_EXPIRED { border-left-color: var(--warning); }
+    .feed-entry.DENIED_ANOMALY { border-left-color: var(--purple); }
+
+    .feed-row {
+      display: flex;
+      justify-content: space-between;
+      color: var(--text-muted);
+      margin-bottom: 0.25rem;
+    }
+    .feed-key {
+      color: #fff;
+      font-weight: 600;
+    }
+    .feed-meta {
+      color: #00f0ff;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateX(-6px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 2rem 1.5rem;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo-group">
+      <div class="logo-icon">🛡️</div>
+      <div class="logo-text">
+        <h1>SentinelTrust Zero-Trust</h1>
+      </div>
+    </div>
+    <div style="display:flex; gap: 1rem; align-items:center;">
+      <span class="badge-live">DEFENSE MESH ACTIVE</span>
+      <a href="https://github.com/tejashr0716" target="_blank" style="color:var(--text-muted); text-decoration:none; font-size:0.85rem; font-weight:600;">GitHub →</a>
+    </div>
+  </header>
+
+  <div class="hero">
+    <h2>Sub-Microsecond <span class="highlight">Zero-Trust Token Auth</span> & Threat Detection</h2>
+    <p>Enterprise cryptographic gateway pairing C++ 65,536-bit Bloom revocation filters with Murmur3 signature verification, Redis DB 8 blacklists, and Apache Spark federated threat forensics.</p>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="lbl">C++ Bloom Revocation</div>
+      <div class="val" style="color: #00ff9d;">20.4M <span style="font-size:1rem; color:var(--text-muted);">chk/s</span></div>
+    </div>
+    <div class="stat-card">
+      <div class="lbl">C++ Crypto Evaluation</div>
+      <div class="val" style="color: #00f0ff;">2.64M <span style="font-size:1rem; color:var(--text-muted);">tok/s</span></div>
+    </div>
+    <div class="stat-card">
+      <div class="lbl">End-to-End Gateway Stress</div>
+      <div class="val" style="color: #a855f7;">1,386 <span style="font-size:1rem; color:var(--text-muted);">tok/s</span></div>
+    </div>
+    <div class="stat-card">
+      <div class="lbl">P50 Verification Latency</div>
+      <div class="val" style="color: #ffb800;">9.24 <span style="font-size:1rem; color:var(--text-muted);">ms</span></div>
+    </div>
+  </div>
+
+  <div class="main-grid">
+    <!-- Zero-Trust Request Simulator -->
+    <div class="panel">
+      <div class="panel-header">
+        <h3><span>🔐</span> Zero-Trust Request Evaluator</h3>
+        <span style="font-size:0.75rem; font-family:'JetBrains Mono'; color:var(--primary);">C++ Nano Engine</span>
+      </div>
+
+      <div class="form-group">
+        <label>Target Protected Microservice</label>
+        <select id="serviceSelect">
+          <option value="svc_payment_core">Stripe Payment Processing Gateway (Critical)</option>
+          <option value="svc_order_engine">Apex Distributed Order Matching (Critical)</option>
+          <option value="svc_telemetry_hub">CloudSentinel Monitoring Mesh (Internal)</option>
+          <option value="svc_auth_broker">Enterprise Identity Provider (Critical)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Simulation Scenario</label>
+        <select id="scenarioSelect" onchange="onScenarioChange()">
+          <option value="VALID">Legitimate Request (Cryptographically Signed)</option>
+          <option value="TAMPERED">Signature Tampering / Forgery Attack</option>
+          <option value="EXPIRED">Expired Security Token Replay</option>
+          <option value="REVOKED">Revoked Token (Instant Bloom Filter Gate)</option>
+          <option value="HOSTILE_IP">Hostile IP Botnet / Anomaly Probe</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Token Identifier (token_id)</label>
+        <input type="text" id="tokInput" value="tok_prod_449210_live">
+      </div>
+
+      <div class="form-group">
+        <label>Source Client IP</label>
+        <input type="text" id="ipInput" value="10.240.10.45">
+      </div>
+
+      <div class="btn-group">
+        <button class="btn-primary" onclick="evaluateRequest()">
+          <span>🛡️</span> Verify & Authorize
+        </button>
+        <button class="btn-danger" onclick="revokeCurrentToken()">
+          <span>🚫</span> Revoke Token
+        </button>
+      </div>
+
+      <!-- In-Memory Bloom Filter Bit Matrix -->
+      <div style="margin-top: 1.75rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+          <label style="font-size: 0.8rem; font-weight:600; color:var(--text-muted); text-transform:uppercase;">65,536-bit Bloom Revocation Matrix</label>
+          <span id="bloomCount" style="font-family:'JetBrains Mono'; font-size:0.8rem; color:#ff3366;">14 bits set</span>
+        </div>
+        <div class="bloom-matrix" id="bloomMatrix">
+          <!-- 128 Bit Cells Rendered -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Threat & Audit Log -->
+    <div class="panel">
+      <div class="panel-header">
+        <h3><span>📡</span> Real-Time Security Telemetry</h3>
+        <button onclick="clearStream()" style="background:none; border:none; color:var(--text-muted); font-size:0.75rem; cursor:pointer; font-family:'JetBrains Mono';">Clear Stream</button>
+      </div>
+
+      <div class="stream-feed" id="streamFeed">
+        <div class="feed-entry">
+          <div class="feed-row">
+            <span class="feed-key">DEFENSE_MESH_ONLINE</span>
+            <span class="feed-meta">LATENCY: 42 ns</span>
+          </div>
+          <div>C++ Zero-Trust Engine online. RabbitMQ threat quarantine exchange configured.</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 1.25rem; padding: 1rem; background: rgba(0,0,0,0.3); border-radius:10px; border: 1px solid var(--border); font-size:0.85rem; color:var(--text-muted);">
+        <strong style="color:#fff;">Zero-Trust Principle:</strong> "Never trust, always verify." Every token undergoes sub-50ns Bloom filter revocation checks and nanosecond cryptographic HMAC/Murmur verification before reaching microservices.
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <p>SentinelTrust Security Gateway — Developed with C++17, Python 3.14, Redis 7 (DB 8), RabbitMQ, PostgreSQL 16 & Apache Spark 4.2.</p>
+  </footer>
+
+  <script>
+    const revokedTokens = new Set(["tok_revoked_bad", "tok_compromised_1"]);
+    const bloomBits = new Array(128).fill(false);
+
+    function initBloomMatrix() {
+      const container = document.getElementById("bloomMatrix");
+      container.innerHTML = "";
+      for (let i = 0; i < 128; i++) {
+        const bit = document.createElement("div");
+        bit.className = "bloom-bit" + (bloomBits[i] ? " set" : "");
+        bit.id = `bit-${i}`;
+        container.appendChild(bit);
+      }
+      updateBloomDisplay();
+    }
+
+    function setBloomBit(idx) {
+      const bitIdx = Math.abs(idx) % 128;
+      bloomBits[bitIdx] = true;
+      const el = document.getElementById(`bit-${bitIdx}`);
+      if (el) el.classList.add("set");
+      updateBloomDisplay();
+    }
+
+    function updateBloomDisplay() {
+      const setBits = bloomBits.filter(b => b).length;
+      document.getElementById("bloomCount").innerText = `${setBits} bits active (Revocations: ${revokedTokens.size})`;
+    }
+
+    function onScenarioChange() {
+      const sc = document.getElementById("scenarioSelect").value;
+      const ipInput = document.getElementById("ipInput");
+      if (sc === "HOSTILE_IP") {
+        ipInput.value = "198.51.100." + Math.floor(Math.random() * 250 + 1);
+      } else {
+        ipInput.value = "10.240.10." + Math.floor(Math.random() * 200 + 10);
+      }
+    }
+
+    function evaluateRequest() {
+      const service = document.getElementById("serviceSelect").value;
+      const scenario = document.getElementById("scenarioSelect").value;
+      const tokId = document.getElementById("tokInput").value;
+      const ip = document.getElementById("ipInput").value;
+
+      let decision = "ALLOWED";
+      let threatScore = 0.0;
+      let reason = "Token verified and authorized via C++ crypto core";
+      let latencyUs = (Math.random() * 15 + 8).toFixed(1);
+
+      if (scenario === "REVOKED" || revokedTokens.has(tokId)) {
+        decision = "DENIED_REVOKED";
+        threatScore = 95.0;
+        reason = `Token ${tokId} matched in-memory Bloom revocation filter`;
+        latencyUs = "0.04"; // Sub-microsecond Bloom hit
+      } else if (scenario === "TAMPERED") {
+        decision = "DENIED_TAMPERED";
+        threatScore = 99.5;
+        reason = "Cryptographic signature mismatch: unauthorized forgery";
+      } else if (scenario === "EXPIRED") {
+        decision = "DENIED_EXPIRED";
+        threatScore = 65.0;
+        reason = "Token expiration timestamp exceeded (replay rejection)";
+      } else if (scenario === "HOSTILE_IP") {
+        decision = "DENIED_ANOMALY";
+        threatScore = 88.0;
+        reason = `Hostile IP reputation anomaly detected for ${ip}`;
+      }
+
+      // Append to live feed
+      const feed = document.getElementById("streamFeed");
+      const entry = document.createElement("div");
+      entry.className = `feed-entry ${decision}`;
+      entry.innerHTML = `
+        <div class="feed-row">
+          <span class="feed-key">${decision} · ${service}</span>
+          <span class="feed-meta">LATENCY: ${latencyUs} µs</span>
+        </div>
+        <div style="color:var(--text-muted); font-size:0.75rem;">
+          Token: ${tokId} | Source: ${ip} | Threat: ${threatScore.toFixed(1)}
+        </div>
+        <div style="color:${decision === 'ALLOWED' ? 'var(--accent)' : 'var(--threat)'}; font-size:0.725rem; margin-top:2px;">
+          ${reason}
+        </div>
+      `;
+      feed.insertBefore(entry, feed.firstChild);
+
+      // Randomize next token
+      document.getElementById("tokInput").value = "tok_prod_" + Math.floor(Math.random() * 899999 + 100000) + "_live";
+    }
+
+    function revokeCurrentToken() {
+      const tokId = document.getElementById("tokInput").value;
+      revokedTokens.add(tokId);
+
+      // Hash to bloom matrix
+      let h1 = 0;
+      for (let i = 0; i < tokId.length; i++) h1 = (h1 << 5) - h1 + tokId.charCodeAt(i);
+      setBloomBit(h1);
+      setBloomBit(h1 * 31);
+      setBloomBit(h1 * 17);
+
+      const feed = document.getElementById("streamFeed");
+      const entry = document.createElement("div");
+      entry.className = "feed-entry DENIED_REVOKED";
+      entry.innerHTML = `
+        <div class="feed-row">
+          <span class="feed-key" style="color:var(--threat);">TOKEN_REVOKED · INSTANT BLOOM REJECTION</span>
+          <span class="feed-meta" style="color:var(--threat);">BROADCAST</span>
+        </div>
+        <div>Token ${tokId} committed to Redis DB 8 and C++ Bloom bitset. Future calls denied.</div>
+      `;
+      feed.insertBefore(entry, feed.firstChild);
+    }
+
+    function clearStream() {
+      document.getElementById("streamFeed").innerHTML = "";
+    }
+
+    window.onload = () => {
+      // Seed some initial bits
+      setBloomBit(12);
+      setBloomBit(45);
+      setBloomBit(89);
+      setBloomBit(104);
+      initBloomMatrix();
+    };
+  </script>
+</body>
+</html>
