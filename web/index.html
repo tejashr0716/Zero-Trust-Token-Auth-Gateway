@@ -540,7 +540,85 @@
       }
     }
 
-    function evaluateRequest() {
+    let isConnectedToRealBackend = false;
+    let ws = null;
+
+    async function checkBackendConnectivity() {
+      try {
+        const res = await fetch("/health", { signal: AbortSignal.timeout(1500) });
+        if (res.ok) {
+          const data = await res.json();
+          isConnectedToRealBackend = true;
+          const badge = document.querySelector(".badge-live");
+          if (badge) {
+            badge.innerText = "🟢 DEFENSE MESH LIVE (FASTAPI + C++ CORE)";
+            badge.style.background = "rgba(0, 255, 157, 0.2)";
+            badge.style.color = "#00ff9d";
+          }
+          initLiveWebSocket();
+          loadRecentThreats();
+        }
+      } catch (e) {
+        // Fallback to client simulation
+      }
+    }
+
+    function initLiveWebSocket() {
+      try {
+        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        ws = new WebSocket(`${protocol}//${window.location.host}/ws/threats`);
+        ws.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+          if (data.type === "SECURITY_ALERT" || data.type === "TOKEN_REVOKED") {
+            const feed = document.getElementById("streamFeed");
+            const entry = document.createElement("div");
+            entry.className = `feed-entry ${data.threat_type || 'DENIED_REVOKED'}`;
+            entry.innerHTML = `
+              <div class="feed-row">
+                <span class="feed-key">${data.threat_type || 'TOKEN_REVOKED'} · ${data.service_id || 'MESH'}</span>
+                <span class="feed-meta">WEBSOCKET PUSH</span>
+              </div>
+              <div style="color:var(--text-muted); font-size:0.75rem;">
+                Token: ${data.token_id} | Threat Score: ${data.threat_score || 99.0}
+              </div>
+              <div style="color:var(--threat); font-size:0.725rem; margin-top:2px;">
+                ${data.reason || 'Revoked credentials quarantine broadcasted'}
+              </div>
+            `;
+            feed.insertBefore(entry, feed.firstChild);
+          }
+        };
+      } catch (err) {}
+    }
+
+    async function loadRecentThreats() {
+      try {
+        const res = await fetch("/api/v1/threats");
+        if (res.ok) {
+          const data = await res.json();
+          const feed = document.getElementById("streamFeed");
+          if (data.recent_audits && data.recent_audits.length > 0) {
+            feed.innerHTML = "";
+            data.recent_audits.slice(0, 8).forEach(a => {
+              const entry = document.createElement("div");
+              entry.className = `feed-entry ${a.decision}`;
+              entry.innerHTML = `
+                <div class="feed-row">
+                  <span class="feed-key">${a.decision} · ${a.service_id}</span>
+                  <span class="feed-meta">LATENCY: ${a.latency_us} µs</span>
+                </div>
+                <div style="color:var(--text-muted); font-size:0.75rem;">
+                  Token: ${a.token_id} | Source: ${a.source_ip}
+                </div>
+              `;
+              feed.appendChild(entry);
+            });
+          }
+        }
+      } catch (e) {}
+    }
+
+    async function evaluateRequest() {
       const service = document.getElementById("serviceSelect").value;
       const scenario = document.getElementById("scenarioSelect").value;
       const tokId = document.getElementById("tokInput").value;
@@ -551,23 +629,74 @@
       let reason = "Token verified and authorized via C++ crypto core";
       let latencyUs = (Math.random() * 15 + 8).toFixed(1);
 
-      if (scenario === "REVOKED" || revokedTokens.has(tokId)) {
-        decision = "DENIED_REVOKED";
-        threatScore = 95.0;
-        reason = `Token ${tokId} matched in-memory Bloom revocation filter`;
-        latencyUs = "0.04"; // Sub-microsecond Bloom hit
-      } else if (scenario === "TAMPERED") {
-        decision = "DENIED_TAMPERED";
-        threatScore = 99.5;
-        reason = "Cryptographic signature mismatch: unauthorized forgery";
-      } else if (scenario === "EXPIRED") {
-        decision = "DENIED_EXPIRED";
-        threatScore = 65.0;
-        reason = "Token expiration timestamp exceeded (replay rejection)";
-      } else if (scenario === "HOSTILE_IP") {
-        decision = "DENIED_ANOMALY";
-        threatScore = 88.0;
-        reason = `Hostile IP reputation anomaly detected for ${ip}`;
+      if (isConnectedToRealBackend) {
+        try {
+          const nowSec = Math.floor(Date.now() / 1000);
+          let sig = "sig_valid_placeholder";
+          let expSec = nowSec + 86400;
+
+          // Issue a genuine token if scenario is VALID
+          if (scenario === "VALID") {
+            const issueRes = await fetch("/api/v1/tokens/issue", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ client_id: "client_live_portal", service_id: service, ttl_seconds: 3600 })
+            });
+            if (issueRes.ok) {
+              const issued = await issueRes.json();
+              sig = issued.signature;
+              expSec = issued.expires_at_sec;
+            }
+          } else if (scenario === "TAMPERED") {
+            sig = "sig_tampered_forged_signature_0000";
+          } else if (scenario === "EXPIRED") {
+            expSec = nowSec - 3600; // Expired 1 hour ago
+          }
+
+          const verifyRes = await fetch("/api/v1/tokens/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              token_id: tokId,
+              client_id: "client_live_portal",
+              service_id: service,
+              signature: sig,
+              issued_at_sec: nowSec - 60,
+              expires_at_sec: expSec,
+              requested_endpoint: "/api/v1/resource",
+              client_ip: ip
+            })
+          });
+
+          if (verifyRes.ok) {
+            const data = await verifyRes.json();
+            decision = data.decision;
+            threatScore = data.threat_score;
+            reason = data.reason;
+            latencyUs = data.latency_us;
+          }
+        } catch (e) {
+          // Fallback to local simulation if network glitch
+        }
+      } else {
+        if (scenario === "REVOKED" || revokedTokens.has(tokId)) {
+          decision = "DENIED_REVOKED";
+          threatScore = 95.0;
+          reason = `Token ${tokId} matched in-memory Bloom revocation filter`;
+          latencyUs = "0.04";
+        } else if (scenario === "TAMPERED") {
+          decision = "DENIED_TAMPERED";
+          threatScore = 99.5;
+          reason = "Cryptographic signature mismatch: unauthorized forgery";
+        } else if (scenario === "EXPIRED") {
+          decision = "DENIED_EXPIRED";
+          threatScore = 65.0;
+          reason = "Token expiration timestamp exceeded (replay rejection)";
+        } else if (scenario === "HOSTILE_IP") {
+          decision = "DENIED_ANOMALY";
+          threatScore = 88.0;
+          reason = `Hostile IP reputation anomaly detected for ${ip}`;
+        }
       }
 
       // Append to live feed
@@ -580,7 +709,7 @@
           <span class="feed-meta">LATENCY: ${latencyUs} µs</span>
         </div>
         <div style="color:var(--text-muted); font-size:0.75rem;">
-          Token: ${tokId} | Source: ${ip} | Threat: ${threatScore.toFixed(1)}
+          Token: ${tokId} | Source: ${ip} | Threat: ${Number(threatScore).toFixed(1)}
         </div>
         <div style="color:${decision === 'ALLOWED' ? 'var(--accent)' : 'var(--threat)'}; font-size:0.725rem; margin-top:2px;">
           ${reason}
@@ -592,9 +721,19 @@
       document.getElementById("tokInput").value = "tok_prod_" + Math.floor(Math.random() * 899999 + 100000) + "_live";
     }
 
-    function revokeCurrentToken() {
+    async function revokeCurrentToken() {
       const tokId = document.getElementById("tokInput").value;
       revokedTokens.add(tokId);
+
+      if (isConnectedToRealBackend) {
+        try {
+          await fetch("/api/v1/tokens/revoke", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token_id: tokId, reason: "ADMIN_DASHBOARD_REVOKE" })
+          });
+        } catch (e) {}
+      }
 
       // Hash to bloom matrix
       let h1 = 0;
@@ -627,6 +766,7 @@
       setBloomBit(89);
       setBloomBit(104);
       initBloomMatrix();
+      checkBackendConnectivity();
     };
   </script>
 </body>

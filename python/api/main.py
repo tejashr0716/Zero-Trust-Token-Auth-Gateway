@@ -1,3 +1,4 @@
+import os
 import asyncio
 import json
 import logging
@@ -8,6 +9,8 @@ from typing import List, Optional, Dict, Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from python.database.connection import init_db_pool, close_db_pool, get_db_pool
@@ -112,6 +115,18 @@ class TokenVerifyRequest(BaseModel):
 class TokenRevokeRequest(BaseModel):
     token_id: str
     reason: str = "COMPROMISED_CREDENTIALS"
+
+web_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "web")
+if os.path.exists(web_dir):
+    app.mount("/static", StaticFiles(directory=web_dir), name="static")
+
+@app.get("/", include_in_schema=False)
+@app.get("/demo", include_in_schema=False)
+async def serve_dashboard():
+    index_path = os.path.join(web_dir, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return HTMLResponse("<h1>SentinelTrust Security Gateway Online</h1>")
 
 @app.get("/health")
 async def health_check():

@@ -246,3 +246,14 @@ def test_spark_threat_detector_import():
     from python.spark.spark_threat_detector import run_federated_threat_analysis, build_spark_session
     assert callable(run_federated_threat_analysis)
     assert callable(build_spark_session)
+
+@pytest.mark.asyncio
+async def test_ui_dashboard_endpoint(async_client):
+    resp = await async_client.get("/")
+    assert resp.status_code == 200
+    assert "SentinelTrust" in resp.text
+    assert "Zero-Trust" in resp.text
+
+    resp_demo = await async_client.get("/demo")
+    assert resp_demo.status_code == 200
+    assert "Bloom Revocation" in resp_demo.text
